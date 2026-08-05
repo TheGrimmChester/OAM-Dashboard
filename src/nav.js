@@ -34,6 +34,9 @@ export const NAV_SECTIONS = [
       // First in the section because it is the reason the product exists: it is
       // where "light model to plan, strong model to implement" is set.
       { to: '/agents', label: 'Agents & Models', icon: 'cpu' },
+      // Directly after it: the endpoints those models resolve against, in the
+      // order a job falls through them.
+      { to: '/endpoints', label: 'AI Endpoints', icon: 'server' },
       { to: '/credentials', label: 'Credentials', icon: 'key' },
     ],
   },
@@ -57,6 +60,7 @@ const TITLES = [
   ['/projects', 'Projects'],
   ['/users', 'Users'],
   ['/agents', 'Agents & Models'],
+  ['/endpoints', 'AI Endpoints'],
   ['/credentials', 'Credentials'],
   ['/audit', 'Audit'],
   ['/settings/account', 'Account'],

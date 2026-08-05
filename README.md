@@ -6,11 +6,12 @@ in front of `oam-api`.
 
 ## What it is for
 
-Five things live here that used to live nowhere, or in five places:
+Six things live here that used to live nowhere, or in five places:
 
 | Page | Answers |
 |---|---|
 | **Agents & Models** | Which model runs which task, per organisation and per user — and which layer supplied it |
+| **AI Endpoints** | Which APIs and agent accounts exist, and the order a job falls through them |
 | **Credentials** | Which AI provider keys and connector secrets exist, at which scope |
 | **Organisations / Projects** | The authoritative directory every family product reads |
 | **Users** | Accounts that survive a restart, with roles and project ACLs |
@@ -33,6 +34,24 @@ change in this console. Each row shows:
 The **Organisation / Just me** switch decides which layer you are writing. It is
 explicit rather than inferred from your role, because an admin can legitimately
 set both, and they have very different blast radius.
+
+### AI Endpoints is the failover policy
+
+An endpoint is a provider *account*: an OpenAI-compatible or Anthropic-compatible
+API (official or not), a Cursor login, a Claude Code install, or another agent CLI.
+A scope may hold many of each — three Cursor accounts, an OpenRouter endpoint
+beside the official Anthropic one — and the table **is** the order a job tries
+them, top to bottom.
+
+Reordering sends the whole list rather than one endpoint's new number: a client
+that PATCHed a single priority would have to renumber the rest itself, and two
+people reordering at once would interleave into an order neither chose.
+
+Three states are kept visually distinct because they call for different actions —
+`ready`, `disabled` (jobs skip it, credential kept), and `no credential`
+(configured but unusable, and silently skipped by every job). The last one looking
+like the first is exactly how "why did my job skip endpoint 1" becomes
+unanswerable.
 
 ## What it deliberately does not do
 

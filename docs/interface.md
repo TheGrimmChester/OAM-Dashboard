@@ -48,6 +48,17 @@ Two details that are load-bearing:
   this build does not know renders as "Unrecognised layer" — an empty cell would
   read as "nothing is configured" on a row that is resolving fine.
 
+## The endpoint order
+
+`AI Endpoints` renders the failover order as the table order, because that *is*
+the policy. Two things it says explicitly rather than leaving to be inferred:
+
+- Your own endpoints are tried before the organisation's regardless of their
+  numbers — a personal account is an override of the shared one, not a peer in one
+  merged list.
+- A job receives only the first few endpoints (three by default), so one job never
+  holds more credentials than it needs.
+
 ## Table states
 
 `loading`, `error` and "loaded and genuinely empty" are always distinct. An empty
