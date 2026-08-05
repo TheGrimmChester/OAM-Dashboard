@@ -1,0 +1,60 @@
+/* App-local styles only. Everything visual comes from @open-family/ui: colours,
+   spacing, type and every component. There are no raw pixel or hex values here
+   for anything the kit already owns — the kit's own token test forbids them, and
+   a console that hardcodes its own spacing stops matching the other five. */
+
+.oam-route-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+/* Login renders outside the app shell, so it owns its own centring. */
+.oam-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6);
+}
+
+.oam-login > * {
+  width: 100%;
+  max-width: 26rem;
+}
+
+/* A row whose effective value is inherited rather than set here. Dimming the
+   value (not the label) is the whole signal: it says "this is what will run, and
+   it is not yours". */
+.oam-inherited-value {
+  color: var(--text-muted);
+}
+
+.oam-source-detail {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 60ch;
+}
+
+/* The Agents & Models editor row, revealed under the agent it edits. */
+.oam-binding-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.oam-form-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Monospace for things that are identifiers rather than prose: agent keys,
+   logical credential names, model IDs. */
+.oam-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
