@@ -13,6 +13,7 @@ Six things live here that used to live nowhere, or in five places:
 | **Agents & Models** | Which model runs which task, per organisation and per user — and which layer supplied it |
 | **AI Endpoints** | Which APIs and agent accounts exist, and the order a job falls through them |
 | **Credentials** | Which AI provider keys and connector secrets exist, at which scope |
+| **Connectors** | SCM installations (GitHub App / PAT) used by review and project tools |
 | **Organisations / Projects** | The authoritative directory every family product reads |
 | **Users** | Accounts that survive a restart, with roles and project ACLs |
 | **Audit** | Which credential a job resolved, from which scope, with which model |

@@ -19,6 +19,11 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3005,
     proxy: {
+      // Connectors still live on ora-api; more specific rule before /api → oam-api.
+      '/api/connectors': {
+        target: process.env.VITE_ORA_API_PROXY_TARGET || 'http://127.0.0.1:8091',
+        changeOrigin: true,
+      },
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8090',
         changeOrigin: true,

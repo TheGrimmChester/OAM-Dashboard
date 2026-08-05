@@ -16,7 +16,8 @@ export default function NotFound() {
         />
         <p className="oam-source-detail">
           Looking for something specific? <Link to="/agents">Agents &amp; Models</Link>,{' '}
-          <Link to="/credentials">Credentials</Link>, <Link to="/users">Users</Link>.
+          <Link to="/connectors">Connectors</Link>, <Link to="/credentials">Credentials</Link>,{' '}
+          <Link to="/users">Users</Link>.
         </p>
       </Card>
     </Stack>

@@ -38,6 +38,8 @@ export const NAV_SECTIONS = [
       // order a job falls through them.
       { to: '/endpoints', label: 'AI Endpoints', icon: 'server' },
       { to: '/credentials', label: 'Credentials', icon: 'key' },
+      // SCM installations used by review and project tools across the family.
+      { to: '/connectors', label: 'Connectors', icon: 'git' },
     ],
   },
   {
@@ -62,6 +64,7 @@ const TITLES = [
   ['/agents', 'Agents & Models'],
   ['/endpoints', 'AI Endpoints'],
   ['/credentials', 'Credentials'],
+  ['/connectors', 'Connectors'],
   ['/audit', 'Audit'],
   ['/settings/account', 'Account'],
   ['/login', 'Sign in'],
