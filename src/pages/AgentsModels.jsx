@@ -8,6 +8,7 @@ import { FiCpu, FiEdit2, FiRotateCcw } from 'react-icons/fi'
 import { useResource, post, tableState, describeError } from '../hooks/useApi'
 import { apiUrl } from '../utils/apiBase'
 import { useTenant } from '../contexts/TenantContext'
+import { isPersonalAccount, readAccountType, userScopeLabel } from '../utils/accountType'
 import { buildAgentRow, groupByProduct, summarizeBinding } from '../utils/inheritance'
 
 /**
@@ -127,10 +128,11 @@ function BindingEditor({ product, agentKey, scope, current, onDone, onCancel }) 
 
 export default function AgentsModels() {
   const toast = useToast()
-  const { organizationId, projectId, nonce } = useTenant()
-  const [scope, setScope] = useState('org')
+  const { organizationId, projectId, nonce, isPersonalAccount: personal } = useTenant()
+  const [scope, setScope] = useState(() => (isPersonalAccount(readAccountType()) ? 'user' : 'org'))
   const [editing, setEditing] = useState(null)
   const [reloadNonce, setReloadNonce] = useState(0)
+  const userLabel = userScopeLabel(readAccountType())
 
   const catalog = useResource('/api/agents/catalog', {
     fallback: { agents: [] },
@@ -266,20 +268,20 @@ export default function AgentsModels() {
           + 'mistaken for one set here.'
         }
         meta={[
-          { label: 'Editing', value: scope === 'user' ? 'my personal overrides' : 'organisation bindings' },
-          { label: 'Organisation', value: organizationId === 'all' ? 'default' : organizationId },
+          { label: 'Editing', value: scope === 'user' ? userLabel : 'organisation bindings' },
+          ...(personal ? [] : [{ label: 'Organisation', value: organizationId === 'all' ? 'default' : organizationId }]),
         ]}
-        actions={
+        actions={personal ? null : (
           <Segmented
             aria-label="Which layer to edit"
             value={scope}
             onChange={setScope}
             items={[
               { value: 'org', label: 'Organisation' },
-              { value: 'user', label: 'Just me' },
+              { value: 'user', label: userLabel },
             ]}
           />
-        }
+        )}
       />
 
       {error ? (

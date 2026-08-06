@@ -6,6 +6,7 @@ import {
 import { FiKey, FiPlus, FiTrash2 } from 'react-icons/fi'
 import { useResource, post, tableState } from '../hooks/useApi'
 import { useTenant } from '../contexts/TenantContext'
+import { credentialScopeOptions, readAccountType } from '../utils/accountType'
 
 /**
  * Credentials: which keys exist, at which scope, and nothing else.
@@ -21,11 +22,6 @@ import { useTenant } from '../contexts/TenantContext'
  * it. That is stated on the page rather than left to be discovered.
  */
 
-const SCOPES = [
-  { value: 'org', label: 'Organisation — everyone in this org' },
-  { value: 'user', label: 'Just me — a personal override' },
-  { value: 'admin', label: 'Admin — never served to a tenant caller' },
-]
 
 const SCOPE_TONE = { admin: 'warning', org: 'info', user: 'success' }
 
@@ -46,9 +42,10 @@ const KNOWN_KEYS = [
 
 function SetCredential({ onDone, onCancel }) {
   const toast = useToast()
-  const { scopeLabel } = useTenant()
+  const { scopeLabel, isPersonalAccount: personal } = useTenant()
+  const scopeOptions = credentialScopeOptions(readAccountType())
   const [key, setKey] = useState('')
-  const [scope, setScope] = useState('org')
+  const [scope, setScope] = useState(scopeOptions[0]?.value || 'user')
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -94,8 +91,8 @@ function SetCredential({ onDone, onCancel }) {
             {KNOWN_KEYS.map((k) => <option key={k} value={k} />)}
           </datalist>
         </Field>
-        <Field label="Scope" hint={`Organisation writes land on ${scopeLabel}.`}>
-          <Select block options={SCOPES} value={scope} onChange={(e) => setScope(e.target.value)} />
+        <Field label="Scope" hint={personal ? 'Personal accounts store keys on your account only.' : `Organisation writes land on ${scopeLabel}.`}>
+          <Select block options={scopeOptions} value={scope} onChange={(e) => setScope(e.target.value)} />
         </Field>
         <Field
           label="Value"

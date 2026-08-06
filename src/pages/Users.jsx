@@ -28,12 +28,19 @@ const ROLES = [
 
 const ROLE_TONE = { admin: 'warning', editor: 'info', viewer: 'neutral' }
 
+const ACCOUNT_TYPES = [
+  { value: 'personal', label: 'Personal — individual account, no organisation' },
+  { value: 'organization', label: 'Organisation member — belongs to one organisation' },
+]
+
 function NewUser({ onDone, onCancel }) {
   const toast = useToast()
-  const { scopeLabel } = useTenant()
+  const { scopeLabel, organizationId } = useTenant()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('viewer')
+  const [accountType, setAccountType] = useState('organization')
+  const [explicitOrg, setExplicitOrg] = useState('')
   const [projectIds, setProjectIds] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -42,12 +49,23 @@ function NewUser({ onDone, onCancel }) {
     setBusy(true)
     setError(null)
     try {
-      await post('/api/users/set', {
+      const body = {
         username: username.trim(),
         password,
         role,
+        account_type: accountType,
         project_ids: projectIds.split(',').map((s) => s.trim()).filter(Boolean),
-      })
+      }
+      if (accountType === 'organization') {
+        const org = (organizationId !== 'all' ? organizationId : explicitOrg.trim())
+        if (!org) {
+          setError('Pick an organisation in the top bar or enter one below.')
+          setBusy(false)
+          return
+        }
+        body.organization_id = org
+      }
+      await post('/api/users/set', body)
       setPassword('')
       toast.push({ tone: 'success', title: `${username.trim()} saved as ${role}` })
       onDone()
@@ -61,10 +79,33 @@ function NewUser({ onDone, onCancel }) {
   return (
     <Stack>
       {error ? <Banner tone="danger" title="Could not save the user">{error}</Banner> : null}
-      <Banner tone="accent" title={`This account will belong to ${scopeLabel}`}>
-        The organisation comes from the scope in the top bar, not from a field here.
-      </Banner>
+      {accountType === 'organization' ? (
+        <Banner tone="accent" title={`This account will belong to ${scopeLabel}`}>
+          The organisation comes from the scope in the top bar, or from the field below when the bar says default.
+        </Banner>
+      ) : (
+        <Banner tone="accent" title="This is a personal account">
+          Personal accounts never belong to an organisation. The type is fixed at creation.
+        </Banner>
+      )}
       <div className="oam-binding-editor">
+        <Field label="Account type" hint="Immutable after the user is created.">
+          <Select
+            block
+            options={ACCOUNT_TYPES}
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value)}
+          />
+        </Field>
+        {accountType === 'organization' && organizationId === 'all' ? (
+          <Field label="Organisation" hint="Required for organisation members.">
+            <Input
+              value={explicitOrg}
+              onChange={(e) => setExplicitOrg(e.target.value)}
+              placeholder="acme"
+            />
+          </Field>
+        ) : null}
         <Field label="Username">
           <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
         </Field>
@@ -123,6 +164,15 @@ export default function Users() {
       header: 'Role',
       render: (row) => (
         <Badge tone={ROLE_TONE[row.role] || 'neutral'} dot title={`Role: ${row.role}`}>{row.role}</Badge>
+      ),
+    },
+    {
+      key: 'account_type',
+      header: 'Account type',
+      render: (row) => (
+        <Badge tone={row.account_type === 'personal' ? 'success' : 'info'} dot>
+          {row.account_type || (row.organization_id ? 'organization' : 'personal')}
+        </Badge>
       ),
     },
     {

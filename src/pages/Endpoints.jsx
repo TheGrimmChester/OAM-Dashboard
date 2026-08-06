@@ -6,6 +6,7 @@ import {
 import { FiServer, FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiEdit2 } from 'react-icons/fi'
 import { useResource, post, tableState } from '../hooks/useApi'
 import { useTenant } from '../contexts/TenantContext'
+import { endpointScopeOptions, readAccountType } from '../utils/accountType'
 
 /**
  * The AI endpoint registry: which providers an organisation can reach, in the
@@ -31,19 +32,17 @@ const KIND_TONE = {
   cli_generic: 'neutral',
 }
 
-const SCOPES = [
-  { value: 'org', label: 'Organisation — usable by everyone' },
-  { value: 'user', label: 'Just me — my own account' },
-]
 
 function EndpointForm({ kinds, existing, onDone, onCancel }) {
   const toast = useToast()
   const { scopeLabel } = useTenant()
+  const accountType = readAccountType()
+  const scopeOptions = endpointScopeOptions(accountType)
   const editing = !!existing
   const [id, setId] = useState(existing?.id || '')
   const [label, setLabel] = useState(existing?.label || '')
   const [kind, setKind] = useState(existing?.kind || kinds[0]?.kind || 'api_openai')
-  const [scope, setScope] = useState(existing?.scope || 'org')
+  const [scope, setScope] = useState(existing?.scope || scopeOptions[0]?.value || 'user')
   const [baseUrl, setBaseUrl] = useState(existing?.base_url || '')
   const [models, setModels] = useState((existing?.models || []).join(', '))
   const [cliCommand, setCliCommand] = useState(existing?.cli_command || '')
@@ -122,7 +121,7 @@ function EndpointForm({ kinds, existing, onDone, onCancel }) {
           />
         </Field>
         <Field label="Scope">
-          <Select block options={SCOPES} value={scope} onChange={(e) => setScope(e.target.value)} disabled={editing} />
+          <Select block options={scopeOptions} value={scope} onChange={(e) => setScope(e.target.value)} disabled={editing} />
         </Field>
         {isHTTP ? (
           <Field

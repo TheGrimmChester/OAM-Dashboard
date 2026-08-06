@@ -31,7 +31,10 @@ function initialsFor(name) {
 function TenantSwitcher() {
   const {
     organizationId, projectId, organizations, projects, selectOrganization, selectProject,
+    isPersonalAccount: personal, orgLocked,
   } = useTenant()
+
+  if (personal) return null
 
   const org = organizations.find((o) => o.id === organizationId)
   const project = projects.find((p) => p.id === projectId)
@@ -45,20 +48,24 @@ function TenantSwitcher() {
 
   return (
     <OrgSwitcher contextLabel={orgLabel} value={projectLabel} initials={initialsFor(orgLabel)}>
-      <MenuLabel>Organisation</MenuLabel>
-      <MenuItem checked={organizationId === ALL} onSelect={() => selectOrganization(ALL)}>
-        Default organisation
-      </MenuItem>
-      {uniqueOrgs.map((o) => (
-        <MenuItem
-          key={o.id}
-          checked={o.id === organizationId}
-          onSelect={() => selectOrganization(o.id)}
-        >
-          {o.name || o.id}
-        </MenuItem>
-      ))}
-      <MenuSeparator />
+      {!orgLocked ? (
+        <>
+          <MenuLabel>Organisation</MenuLabel>
+          <MenuItem checked={organizationId === ALL} onSelect={() => selectOrganization(ALL)}>
+            Default organisation
+          </MenuItem>
+          {uniqueOrgs.map((o) => (
+            <MenuItem
+              key={o.id}
+              checked={o.id === organizationId}
+              onSelect={() => selectOrganization(o.id)}
+            >
+              {o.name || o.id}
+            </MenuItem>
+          ))}
+          <MenuSeparator />
+        </>
+      ) : null}
       <MenuLabel>Project</MenuLabel>
       <MenuItem checked={projectId === ALL} onSelect={() => selectProject(ALL)}>
         All projects
@@ -103,6 +110,7 @@ export default function Shell({ children }) {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('username')
     localStorage.removeItem('role')
+    localStorage.removeItem('account_type')
     window.location.assign('/login')
   }
 

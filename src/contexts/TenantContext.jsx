@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import axios from 'axios'
 import { apiUrl } from '../utils/apiBase'
+import {
+  isOrganizationAccount, isPersonalAccount, readAccountType,
+} from '../utils/accountType'
 
 /**
  * The org/project scope every read and write on this console is made in.
@@ -41,8 +44,21 @@ export const ALL = 'all'
  * the setter removes the ordering question entirely — whatever request goes out
  * next carries whatever the switcher last said, regardless of effect order.
  */
+function lockedOrgId() {
+  if (!isOrganizationAccount()) return null
+  const org = localStorage.getItem(ORG_KEY)
+  return org && org !== ALL ? org : null
+}
+
+function initialOrganizationId() {
+  const locked = lockedOrgId()
+  if (locked) return locked
+  if (isPersonalAccount()) return ALL
+  return localStorage.getItem(ORG_KEY) || ALL
+}
+
 const scope = {
-  organizationId: localStorage.getItem(ORG_KEY) || ALL,
+  organizationId: initialOrganizationId(),
   projectId: localStorage.getItem(PROJECT_KEY) || ALL,
 }
 
@@ -55,8 +71,12 @@ const scope = {
  * call with no render in between.
  */
 export function currentScopeHeaders() {
+  if (isPersonalAccount()) {
+    return { 'X-Project-ID': scope.projectId || ALL }
+  }
+  const orgId = lockedOrgId() || scope.organizationId || ALL
   return {
-    'X-Organization-ID': scope.organizationId || ALL,
+    'X-Organization-ID': orgId,
     'X-Project-ID': scope.projectId || ALL,
   }
 }
@@ -70,8 +90,10 @@ export function setScope({ organizationId, projectId }) {
 const TenantContext = createContext(null)
 
 export function TenantProvider({ children }) {
+  const [accountType] = useState(() => readAccountType())
   const [organizationId, setOrganizationId] = useState(scope.organizationId)
   const [projectId, setProjectId] = useState(scope.projectId)
+  const orgLocked = isOrganizationAccount(accountType) && !!lockedOrgId()
   const [organizations, setOrganizations] = useState([])
   const [projects, setProjects] = useState([])
   const [nonce, setNonce] = useState(0)
@@ -107,6 +129,7 @@ export function TenantProvider({ children }) {
   }, [nonce, organizationId])
 
   const selectOrganization = useCallback((id) => {
+    if (orgLocked || isPersonalAccount(accountType)) return
     // `scope` first, and synchronously: any request a re-render triggers must
     // already see the new organisation. A project belongs to an organisation, so
     // keeping the old project selected across an org switch would send a scope
@@ -116,7 +139,7 @@ export function TenantProvider({ children }) {
     localStorage.setItem(PROJECT_KEY, ALL)
     setOrganizationId(id)
     setProjectId(ALL)
-  }, [])
+  }, [accountType, orgLocked])
 
   const selectProject = useCallback((id) => {
     setScope({ projectId: id })
@@ -133,9 +156,14 @@ export function TenantProvider({ children }) {
     selectProject,
     refresh,
     nonce,
+    accountType,
+    isPersonalAccount: isPersonalAccount(accountType),
+    orgLocked,
     /** What a write will be attributed to, in words, for a page to show. */
-    scopeLabel: organizationId === ALL ? 'the default organisation' : organizationId,
-  }), [organizationId, projectId, organizations, projects, selectOrganization, selectProject, refresh, nonce])
+    scopeLabel: isPersonalAccount(accountType)
+      ? 'your personal account'
+      : (organizationId === ALL ? 'the default organisation' : organizationId),
+  }), [organizationId, projectId, organizations, projects, selectOrganization, selectProject, refresh, nonce, accountType, orgLocked])
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>
 }

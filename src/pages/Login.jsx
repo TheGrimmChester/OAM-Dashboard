@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
+import { FiKey, FiLogIn } from 'react-icons/fi'
 import axios from 'axios'
-import { Card, Stack, Field, Input, Button, Banner } from '@open-family/ui'
+import { Card, Stack, Field, Input, Button, Banner, Textarea } from '@open-family/ui'
 import { apiUrl } from '../utils/apiBase'
+import { decodeJwtPayload, persistAccountFromLogin, persistAccountFromToken } from '../utils/accountType'
 
 /**
  * Sign in.
@@ -16,6 +18,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [showToken, setShowToken] = useState(false)
+  const [token, setToken] = useState(() => localStorage.getItem('auth_token') || '')
 
   const submit = async (event) => {
     event.preventDefault()
@@ -28,10 +32,8 @@ export default function Login() {
       localStorage.setItem('auth_token', token)
       localStorage.setItem('username', r.data?.username || username)
       localStorage.setItem('role', r.data?.role || '')
-      // Land on the signing-in user's own organisation rather than the default
-      // scope. Otherwise a member of one org opens the console pointed at
-      // another one and edits the wrong bindings before noticing the top bar.
-      if (r.data?.org_id) localStorage.setItem('oam_organization_id', r.data.org_id)
+      // account_type + org_id decide whether the org switcher is shown and locked.
+      persistAccountFromLogin(r.data)
       setPassword('')
       // `next` is read back only as a path. An absolute URL here would make the
       // login page an open redirect for anyone who can hand someone a link.
@@ -47,6 +49,24 @@ export default function Login() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const saveToken = (event) => {
+    event.preventDefault()
+    const value = token.trim()
+    if (value) {
+      localStorage.setItem('auth_token', value)
+      persistAccountFromToken(value)
+      const claims = decodeJwtPayload(value)
+      if (claims?.username) localStorage.setItem('username', claims.username)
+      if (claims?.role) localStorage.setItem('role', claims.role)
+    } else {
+      localStorage.removeItem('auth_token')
+    }
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('next')
+    const safe = next && next.startsWith('/') && !next.startsWith('//') ? next : '/overview'
+    window.location.assign(safe)
   }
 
   return (
@@ -76,6 +96,31 @@ export default function Login() {
             </Button>
           </Stack>
         </form>
+
+        <Button variant="ghost" icon={<FiKey />} block onClick={() => setShowToken((v) => !v)}>
+          {showToken ? 'Hide token paste' : 'Paste a bearer token instead'}
+        </Button>
+
+        {showToken ? (
+          <form onSubmit={saveToken}>
+            <Stack>
+              <Field
+                label="Bearer token"
+                hint="An OAM-issued JWT. Saving it here signs this browser in without a password round-trip."
+              >
+                <Textarea
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste an OAM-issued JWT"
+                  rows={4}
+                />
+              </Field>
+              <Button type="submit" variant="primary" icon={<FiLogIn />} block>
+                {token.trim() ? 'Save and continue' : 'Continue without a token'}
+              </Button>
+            </Stack>
+          </form>
+        ) : null}
       </Card>
     </div>
   )
