@@ -83,11 +83,15 @@ export function useConnectors({ skip = false } = {}) {
     }
   }, [query])
 
-  const claimConnector = useCallback(async (id) => {
+  const claimConnector = useCallback(async (id, claimToken) => {
     if (!id) return { ok: false, error: 'Missing connector id' }
+    const token = String(claimToken || '').trim()
+    if (!token) return { ok: false, error: 'claim_token required' }
     setBusy(true)
     try {
-      const { data } = await axios.post(apiUrl(`/api/connectors/${encodeURIComponent(id)}/claim`))
+      const { data } = await axios.post(apiUrl(`/api/connectors/${encodeURIComponent(id)}/claim`), {
+        claim_token: token,
+      })
       await query.reload?.()
       return { ok: true, data }
     } catch (e) {
