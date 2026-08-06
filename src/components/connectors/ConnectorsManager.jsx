@@ -4,6 +4,7 @@ import {
   Badge, Button, Card, CellStack, Code, EmptyState, Field, Grid, Input, Select, Stack, Table,
 } from '@open-family/ui'
 import { useConnectors, connectorLabel, connectorTenancy } from '../../hooks/useConnectors'
+import { useTenant } from '../../contexts/TenantContext'
 import { webhookModeLabel } from '../../lib/scmCheckers'
 import WatchedReposPanel from './WatchedReposPanel'
 
@@ -29,6 +30,7 @@ export default function ConnectorsManager({
   scopeFilter = '',
   readOnly = false,
 }) {
+  const { organizationId } = useTenant()
   const {
     connectors: allConnectors,
     githubAppConfigured,
@@ -82,13 +84,23 @@ export default function ConnectorsManager({
     setPatForm((f) => ({ ...f, scope: effectiveDefault }))
   }, [effectiveDefault])
 
-  // One-time claim from GitHub orphan callback redirect.
+  // One-time claim from GitHub orphan callback — confirm target org first.
   useEffect(() => {
     const id = String(claimConnectorId || '').trim()
     const token = String(claimToken || '').trim()
     if (!id || !token) return
     const key = `${id}:${token}`
     if (claimAttempted.current === key) return
+    const org = String(organizationId || '').trim()
+    if (!org || org === 'all') {
+      flash('error', 'Select an organization before claiming', 'Use the tenant picker, then reopen the claim link.')
+      onClaimParamsConsumed?.()
+      claimAttempted.current = key
+      return
+    }
+    if (!window.confirm(`Claim this GitHub App connector into organization "${org}"?\n\nCancel if you are signed into the wrong Open org.`)) {
+      return
+    }
     claimAttempted.current = key
     let cancelled = false
     ;(async () => {
@@ -96,14 +108,14 @@ export default function ConnectorsManager({
       if (cancelled) return
       onClaimParamsConsumed?.()
       if (result.ok) {
-        flash('ok', 'Connector claimed', result.data?.connector?.organization_id || id)
+        flash('ok', 'Connector claimed', result.data?.connector?.organization_id || org)
       } else {
         flash('error', 'Claim failed', result.error)
       }
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimConnectorId, claimToken])
+  }, [claimConnectorId, claimToken, organizationId])
 
   const scopeWritable = (scope) => {
     const s = scope || effectiveDefault
