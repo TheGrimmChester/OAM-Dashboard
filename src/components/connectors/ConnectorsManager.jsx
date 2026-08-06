@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { FiGitBranch, FiEdit2, FiTrash2, FiRefreshCw } from 'react-icons/fi'
+import { FiGitBranch, FiEdit2, FiTrash2, FiRefreshCw, FiCheckCircle } from 'react-icons/fi'
 import {
   Badge, Button, Card, CellStack, Code, EmptyState, Field, Grid, Input, Select, Stack, Table,
 } from '@open-family/ui'
@@ -38,6 +38,7 @@ export default function ConnectorsManager({
     openGitHubInstall,
     updateConnector,
     deleteConnector,
+    claimConnector,
   } = useConnectors()
 
   const connectors = scopeFilter
@@ -162,8 +163,21 @@ export default function ConnectorsManager({
     }
   }
 
+  const handleClaim = async (c) => {
+    if (formReadOnly || !canEditOrg || !c?.id) return
+    if (!window.confirm(`Claim connector ${c.id} into your current Open organization? SCM stays blocked until claimed.`)) return
+    const result = await claimConnector(c.id)
+    if (result.ok) {
+      const org = result.data?.connector?.organization_id || 'current tenant'
+      flash('ok', 'Connector claimed', org)
+    } else {
+      flash('error', 'Claim failed', result.error)
+    }
+  }
+
   const rowWritable = (c) => !readOnly && scopeWritable(c.scope || scopeFilter || 'org')
   const anyRowWritable = connectors.some((c) => rowWritable(c))
+  const isPendingClaim = (c) => String(c?.status || '').toLowerCase() === 'pending_claim'
 
   return (
     <Stack>
@@ -174,6 +188,8 @@ export default function ConnectorsManager({
             GitHub App is production (webhooks + Check Runs). PAT + repo hooks work without an App.
             App configured: {githubAppConfigured ? 'yes' : 'no'}.
             {' '}Every connector is scoped to an organisation and project in OAM.
+            {' '}Prefer <strong>Connect GitHub App</strong> while signed into the target Open org (signed install state).
+            Orphan marketplace installs show as pending claim.
           </>
         )}
         actions={(
@@ -213,6 +229,13 @@ export default function ConnectorsManager({
               },
             },
             {
+              key: 'status',
+              header: 'Status',
+              render: (c) => (isPendingClaim(c)
+                ? <Badge tone="warning" title="Marketplace/orphan install — claim into your Open org">pending claim</Badge>
+                : <Badge tone="good">{c.status || 'active'}</Badge>),
+            },
+            {
               key: 'ingress',
               header: 'Ingress',
               render: (c) => {
@@ -240,6 +263,9 @@ export default function ConnectorsManager({
           rowActions={anyRowWritable
             ? (c) => (rowWritable(c)
               ? [
+                ...(isPendingClaim(c) && canEditOrg
+                  ? [{ label: 'Claim into current org', icon: <FiCheckCircle />, disabled: busy, onSelect: () => handleClaim(c) }, { separator: true }]
+                  : []),
                 { label: 'Edit connector', icon: <FiEdit2 />, disabled: busy, onSelect: () => beginEdit(c) },
                 { separator: true },
                 { label: 'Delete connector', icon: <FiTrash2 />, danger: true, disabled: busy, onSelect: () => handleDelete(c.id) },

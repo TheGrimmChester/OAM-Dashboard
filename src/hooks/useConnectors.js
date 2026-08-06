@@ -83,6 +83,20 @@ export function useConnectors({ skip = false } = {}) {
     }
   }, [query])
 
+  const claimConnector = useCallback(async (id) => {
+    if (!id) return { ok: false, error: 'Missing connector id' }
+    setBusy(true)
+    try {
+      const { data } = await axios.post(apiUrl(`/api/connectors/${encodeURIComponent(id)}/claim`))
+      await query.reload?.()
+      return { ok: true, data }
+    } catch (e) {
+      return { ok: false, error: e.response?.data || e.message }
+    } finally {
+      setBusy(false)
+    }
+  }, [query])
+
   return {
     connectors,
     githubAppConfigured,
@@ -98,6 +112,7 @@ export function useConnectors({ skip = false } = {}) {
     openGitHubInstall,
     updateConnector,
     deleteConnector,
+    claimConnector,
   }
 }
 
