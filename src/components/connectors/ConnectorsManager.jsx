@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { FiGitBranch, FiEdit2, FiTrash2, FiRefreshCw } from 'react-icons/fi'
 import {
   Badge, Button, Card, CellStack, Code, EmptyState, Field, Grid, Input, Select, Stack, Table,
 } from '@open-family/ui'
 import { useConnectors, connectorLabel, connectorTenancy } from '../../hooks/useConnectors'
+import { useTenant } from '../../contexts/TenantContext'
 import { webhookModeLabel } from '../../lib/scmCheckers'
 import WatchedReposPanel from './WatchedReposPanel'
 
@@ -15,15 +16,21 @@ const SCOPE_OPTIONS = {
 
 /**
  * Full SCM connector management UI — list, connect GitHub App / PAT, edit, delete.
+ * Orphan GitHub App installs are claimed only via callback deep-link
+ * (`?connector=` + `#claim_token=`), not from a shared pending queue.
  */
 export default function ConnectorsManager({
   initialEditId = '',
+  claimConnectorId = '',
+  claimToken = '',
+  onClaimParamsConsumed,
   onFlash,
   footer = null,
   defaultScope = 'org',
   scopeFilter = '',
   readOnly = false,
 }) {
+  const { organizationId } = useTenant()
   const {
     connectors: allConnectors,
     githubAppConfigured,
@@ -38,15 +45,22 @@ export default function ConnectorsManager({
     openGitHubInstall,
     updateConnector,
     deleteConnector,
+    claimConnector,
   } = useConnectors()
 
-  const connectors = scopeFilter
+  const connectors = (scopeFilter
     ? allConnectors.filter((c) => (c.scope || 'org') === scopeFilter)
     : allConnectors.filter((c) => {
       const s = c.scope || 'org'
       if (s === 'admin') return canEditAdmin || defaultScope === 'admin'
       return true
     })
+  ).filter((c) => {
+    const status = String(c?.status || '').toLowerCase()
+    if (status === 'pending_claim') return false
+    if (!String(c?.organization_id || '').trim() && (c.scope || 'org') !== 'admin') return false
+    return true
+  })
 
   const allowedScopes = []
   if (canEditUser) allowedScopes.push('user')
@@ -60,6 +74,7 @@ export default function ConnectorsManager({
   const [patForm, setPatForm] = useState({ token: '', login: '', repos: '', scope: effectiveDefault })
   const [editForm, setEditForm] = useState({ login: '', display_name: '', token: '' })
   const [editingId, setEditingId] = useState('')
+  const claimAttempted = useRef('')
 
   const flash = (tone, title, detail) => {
     onFlash?.(tone, title, detail)
@@ -68,6 +83,39 @@ export default function ConnectorsManager({
   useEffect(() => {
     setPatForm((f) => ({ ...f, scope: effectiveDefault }))
   }, [effectiveDefault])
+
+  // One-time claim from GitHub orphan callback — confirm target org first.
+  useEffect(() => {
+    const id = String(claimConnectorId || '').trim()
+    const token = String(claimToken || '').trim()
+    if (!id || !token) return
+    const key = `${id}:${token}`
+    if (claimAttempted.current === key) return
+    const org = String(organizationId || '').trim()
+    if (!org || org === 'all') {
+      flash('error', 'Select an organization before claiming', 'Use the tenant picker, then reopen the claim link.')
+      onClaimParamsConsumed?.()
+      claimAttempted.current = key
+      return
+    }
+    if (!window.confirm(`Claim this GitHub App connector into organization "${org}"?\n\nCancel if you are signed into the wrong Open org.`)) {
+      return
+    }
+    claimAttempted.current = key
+    let cancelled = false
+    ;(async () => {
+      const result = await claimConnector(id, token)
+      if (cancelled) return
+      onClaimParamsConsumed?.()
+      if (result.ok) {
+        flash('ok', 'Connector claimed', result.data?.connector?.organization_id || org)
+      } else {
+        flash('error', 'Claim failed', result.error)
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claimConnectorId, claimToken, organizationId])
 
   const scopeWritable = (scope) => {
     const s = scope || effectiveDefault
@@ -174,6 +222,8 @@ export default function ConnectorsManager({
             GitHub App is production (webhooks + Check Runs). PAT + repo hooks work without an App.
             App configured: {githubAppConfigured ? 'yes' : 'no'}.
             {' '}Every connector is scoped to an organisation and project in OAM.
+            {' '}Prefer <strong>Connect GitHub App</strong> while signed into the target Open org (signed install state).
+            Orphan marketplace installs are claimed via the callback deep-link with a one-time claim token.
           </>
         )}
         actions={(
@@ -211,6 +261,11 @@ export default function ConnectorsManager({
                   />
                 )
               },
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (c) => <Badge tone="good">{c.status || 'active'}</Badge>,
             },
             {
               key: 'ingress',

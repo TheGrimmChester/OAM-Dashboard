@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   PageHeader, Card, Stack, Grid, StatTile, Badge, Banner, Button, DefinitionList,
 } from '@open-family/ui'
-import { FiCpu, FiKey, FiUsers, FiHome } from 'react-icons/fi'
+import { FiCpu, FiKey, FiGitBranch, FiUsers, FiHome } from 'react-icons/fi'
 import { useResource } from '../hooks/useApi'
 import { useTenant } from '../contexts/TenantContext'
 
@@ -37,6 +37,7 @@ export default function Overview() {
   const orgs = useResource('/api/organizations', { fallback: { organizations: [] }, deps })
   const users = useResource('/api/users', { fallback: { users: [] }, deps })
   const creds = useResource('/api/credentials', { fallback: { credentials: [] }, deps })
+  const connectors = useResource('/api/connectors', { fallback: { connectors: [] }, deps })
   const catalog = useResource('/api/agents/catalog', { fallback: { agents: [] }, deps })
 
   const agents = catalog.data?.agents || []
@@ -100,6 +101,11 @@ export default function Overview() {
           label="Credentials" icon={<FiKey />} to="/credentials"
           value={(creds.data?.credentials || []).length}
           loading={creds.loading} error={creds.error}
+        />
+        <Count
+          label="Connectors" icon={<FiGitBranch />} to="/connectors"
+          value={(connectors.data?.connectors || []).length}
+          loading={connectors.loading} error={connectors.error}
         />
         <Count
           label="Configurable agents" icon={<FiCpu />} to="/agents"

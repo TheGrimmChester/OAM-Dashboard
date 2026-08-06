@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  FiGrid, FiHome, FiFolder, FiUsers, FiCpu, FiServer, FiKey, FiList, FiUser,
+  FiGrid, FiHome, FiFolder, FiUsers, FiCpu, FiServer, FiKey, FiGitBranch, FiList, FiUser,
 } from 'react-icons/fi'
 
 /**
@@ -19,6 +19,7 @@ const GLYPHS = {
   cpu: FiCpu,
   server: FiServer,
   key: FiKey,
+  'git-branch': FiGitBranch,
   list: FiList,
   user: FiUser,
 }

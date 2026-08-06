@@ -14,6 +14,7 @@ const Users = lazy(() => import('./pages/Users'))
 const AgentsModels = lazy(() => import('./pages/AgentsModels'))
 const Endpoints = lazy(() => import('./pages/Endpoints'))
 const Credentials = lazy(() => import('./pages/Credentials'))
+const Connectors = lazy(() => import('./pages/Connectors'))
 const Audit = lazy(() => import('./pages/Audit'))
 const Account = lazy(() => import('./pages/Account'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -93,6 +94,7 @@ function App() {
                 <Route path="/agents" element={<AgentsModels />} />
                 <Route path="/endpoints" element={<Endpoints />} />
                 <Route path="/credentials" element={<Credentials />} />
+                <Route path="/connectors" element={<Connectors />} />
                 <Route path="/audit" element={<Audit />} />
                 <Route path="/settings/account" element={<Account />} />
 
