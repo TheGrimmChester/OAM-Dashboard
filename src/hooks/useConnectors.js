@@ -6,8 +6,8 @@ import { apiUrl } from '../utils/apiBase'
 /**
  * Shared SCM connectors list + mutations (GitHub App / PAT).
  *
- * The write surface lives in this console; the connector rows are still served
- * by ora-api (`/api/connectors`), proxied same-origin by nginx / Vite.
+ * Same-origin `/api/connectors*` hits oam-api (BFF over ORA protocol). Nginx /
+ * Vite proxy all `/api/` to oam-api — no ora-api proxy needed for this console.
  */
 export function useConnectors({ skip = false } = {}) {
   const query = useResource('/api/connectors', { fallback: { connectors: [] }, skip })
