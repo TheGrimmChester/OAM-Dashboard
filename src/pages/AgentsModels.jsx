@@ -30,6 +30,7 @@ import { buildAgentRow, groupByProduct, summarizeBinding } from '../utils/inheri
 
 const PROVIDERS = [
   { value: 'cli_cursor', label: 'Cursor CLI (cli_cursor)' },
+  { value: 'cli_qwen_code', label: 'Qwen Code CLI' },
   { value: 'openai', label: 'OpenAI-compatible (openai)' },
   { value: 'anthropic', label: 'Anthropic (anthropic)' },
 ]
@@ -105,7 +106,9 @@ function BindingEditor({ product, agentKey, scope, current, onDone, onCancel }) 
         </Field>
         <Field
           label="Model"
-          hint="`auto` lets the provider choose — a real setting here, not a placeholder."
+          hint={provider === 'cli_qwen_code'
+            ? 'Qwen Code does not support `auto` — enter an explicit model id (e.g. qwen3-coder-plus).'
+            : '`auto` lets the provider choose — a real setting here, not a placeholder.'}
         >
           <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="auto" />
         </Field>

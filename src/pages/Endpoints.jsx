@@ -29,6 +29,7 @@ const KIND_TONE = {
   api_anthropic: 'accent',
   cli_cursor: 'success',
   cli_claude_code: 'accent',
+  cli_qwen_code: 'warning',
   cli_generic: 'neutral',
 }
 
