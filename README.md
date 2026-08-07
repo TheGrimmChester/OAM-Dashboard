@@ -6,13 +6,12 @@ in front of `oam-api`.
 
 ## What it is for
 
-Six things live here that used to live nowhere, or in five places:
+Five things live here that used to live nowhere, or in five places:
 
 | Page | Answers |
 |---|---|
 | **Agents & Models** | Which model runs which task, per organisation and per user — and which layer supplied it |
-| **AI Endpoints** | Which APIs and agent accounts exist, and the order a job falls through them |
-| **Credentials** | Which AI provider keys and connector secrets exist, at which scope |
+| **AI Endpoints** | Which APIs and agent accounts exist (with provider keys), and the order a job falls through them |
 | **Organisations / Projects** | The authoritative directory every family product reads |
 | **Users** | Accounts that survive a restart, with roles and project ACLs |
 | **Audit** | Which credential a job resolved, from which scope, with which model |

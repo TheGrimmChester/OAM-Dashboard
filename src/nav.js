@@ -37,8 +37,6 @@ export const NAV_SECTIONS = [
       // Directly after it: the endpoints those models resolve against, in the
       // order a job falls through them.
       { to: '/endpoints', label: 'AI Endpoints', icon: 'server' },
-      { to: '/credentials', label: 'Credentials', icon: 'key' },
-      // Distinct glyph from Credentials (`key`) — collapsed rail is icon-only.
       { to: '/connectors', label: 'Connectors', icon: 'git-branch' },
     ],
   },
@@ -63,7 +61,6 @@ const TITLES = [
   ['/users', 'Users'],
   ['/agents', 'Agents & Models'],
   ['/endpoints', 'AI Endpoints'],
-  ['/credentials', 'Credentials'],
   ['/connectors', 'Connectors'],
   ['/audit', 'Audit'],
   ['/settings/account', 'Account'],
