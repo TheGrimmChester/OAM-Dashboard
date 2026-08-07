@@ -6,10 +6,12 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Shell from './components/shell/Shell'
 import { TenantProvider } from './contexts/TenantContext'
 import { apiUrl } from './utils/apiBase'
+import { directoryNavVisibility, readAccountType, readRole } from './utils/accountType'
 
 const Overview = lazy(() => import('./pages/Overview'))
 const Organizations = lazy(() => import('./pages/Organizations'))
 const Projects = lazy(() => import('./pages/Projects'))
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
 const Users = lazy(() => import('./pages/Users'))
 const AgentsModels = lazy(() => import('./pages/AgentsModels'))
 const Endpoints = lazy(() => import('./pages/Endpoints'))
@@ -63,6 +65,14 @@ function RequireAuth({ children }) {
   return children
 }
 
+/** Hide platform directory pages the caller's account type must not open. */
+function RequireDirectory({ kind, children }) {
+  const vis = directoryNavVisibility({ role: readRole(), accountType: readAccountType() })
+  const ok = kind === 'users' ? vis.users : vis.organizations
+  if (!ok) return <Navigate to="/overview" replace />
+  return children
+}
+
 function App() {
   const { pathname } = useLocation()
 
@@ -87,9 +97,10 @@ function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/overview" replace />} />
                 <Route path="/overview" element={<Overview />} />
-                <Route path="/organizations" element={<Organizations />} />
+                <Route path="/organizations" element={<RequireDirectory kind="organizations"><Organizations /></RequireDirectory>} />
                 <Route path="/projects" element={<Projects />} />
-                <Route path="/users" element={<Users />} />
+                <Route path="/projects/:id" element={<ProjectDetail />} />
+                <Route path="/users" element={<RequireDirectory kind="users"><Users /></RequireDirectory>} />
                 <Route path="/agents" element={<AgentsModels />} />
                 <Route path="/endpoints" element={<Endpoints />} />
                 <Route path="/credentials" element={<Navigate to="/endpoints" replace />} />

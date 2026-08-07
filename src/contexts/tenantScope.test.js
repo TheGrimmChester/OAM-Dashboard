@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -16,6 +16,10 @@ beforeAll(() => {
 const load = async () => import('./TenantContext.jsx')
 
 describe('the scope headers stamped on every request', () => {
+  beforeEach(() => {
+    globalThis.localStorage.store = {}
+  })
+
   // This is the regression that made the Agents & Models page lie. The
   // interceptor used to be re-registered by an effect keyed on the organisation,
   // which put it one commit behind: React runs a child's effects before its
@@ -29,7 +33,11 @@ describe('the scope headers stamped on every request', () => {
   it('reflects a change immediately, with no render in between', async () => {
     const { currentScopeHeaders, setScope } = await load()
 
-    setScope({ organizationId: 'acme', projectId: 'checkout-api' })
+    setScope({
+      organizationId: 'acme',
+      selection: ['checkout-api'],
+      enabledProjectIds: ['checkout-api', 'billing'],
+    })
     expect(currentScopeHeaders()).toEqual({
       'X-Organization-ID': 'acme',
       'X-Project-ID': 'checkout-api',
@@ -41,7 +49,11 @@ describe('the scope headers stamped on every request', () => {
 
   it('leaves the other axis alone when only one is set', async () => {
     const { currentScopeHeaders, setScope } = await load()
-    setScope({ organizationId: 'acme', projectId: 'checkout-api' })
+    setScope({
+      organizationId: 'acme',
+      selection: ['checkout-api'],
+      enabledProjectIds: ['checkout-api', 'billing'],
+    })
     setScope({ projectId: 'billing' })
     expect(currentScopeHeaders()).toEqual({
       'X-Organization-ID': 'acme',
@@ -49,15 +61,55 @@ describe('the scope headers stamped on every request', () => {
     })
   })
 
-  // A blank scope must become the explicit "all" marker rather than an empty
-  // header. An empty X-Organization-ID is not the same request as an absent one,
-  // and the service's own normalisation expects the marker.
-  it('never sends an empty scope header', async () => {
-    const { currentScopeHeaders, setScope, ALL } = await load()
-    setScope({ organizationId: '', projectId: '' })
+  it('stamps X-Project-IDs for UI All from enabled directory ids', async () => {
+    const { currentScopeHeaders, setScope } = await load()
+    setScope({
+      organizationId: 'acme',
+      selection: 'all',
+      enabledProjectIds: ['checkout-api', 'billing'],
+    })
     expect(currentScopeHeaders()).toEqual({
-      'X-Organization-ID': ALL,
-      'X-Project-ID': ALL,
+      'X-Organization-ID': 'acme',
+      'X-Project-IDs': 'checkout-api,billing',
+    })
+  })
+
+  it('omits project headers on directory fetches', async () => {
+    const { currentScopeHeaders, setScope } = await load()
+    setScope({
+      organizationId: 'acme',
+      selection: ['checkout-api'],
+      enabledProjectIds: ['checkout-api'],
+    })
+    expect(currentScopeHeaders({ url: '/api/projects' })).toEqual({
+      'X-Organization-ID': 'acme',
+    })
+    expect(currentScopeHeaders({ url: '/api/projects/checkout-api' })).toEqual({
+      'X-Organization-ID': 'acme',
+    })
+  })
+
+  it('only stamps a concrete X-Project-ID on writes when exactly one project is selected', async () => {
+    const { currentScopeHeaders, setScope } = await load()
+    setScope({
+      organizationId: 'acme',
+      selection: 'all',
+      enabledProjectIds: ['checkout-api', 'billing'],
+    })
+    // All projects → org/user-global writes (API uses default-project).
+    expect(currentScopeHeaders({ method: 'post' })).toEqual({
+      'X-Organization-ID': 'acme',
+    })
+
+    setScope({ selection: ['checkout-api'] })
+    expect(currentScopeHeaders({ method: 'post' })).toEqual({
+      'X-Organization-ID': 'acme',
+      'X-Project-ID': 'checkout-api',
+    })
+
+    setScope({ selection: ['checkout-api', 'billing'] })
+    expect(currentScopeHeaders({ method: 'post' })).toEqual({
+      'X-Organization-ID': 'acme',
     })
   })
 })
@@ -94,7 +146,7 @@ describe('the interceptor wiring', () => {
       source.indexOf('axios.interceptors.request.use'),
       source.indexOf('return () => axios.interceptors.request.eject'),
     )
-    expect(body).toContain('currentScopeHeaders()')
+    expect(body).toContain('currentScopeHeaders(')
     // A captured `organizationId`/`projectId` inside the interceptor is the exact
     // shape of the original defect.
     expect(body).not.toMatch(/=\s*organizationId\b/)

@@ -8,6 +8,7 @@ import { FiCpu, FiEdit2, FiRotateCcw } from 'react-icons/fi'
 import { useResource, post, tableState, describeError } from '../hooks/useApi'
 import { apiUrl } from '../utils/apiBase'
 import { useTenant } from '../contexts/TenantContext'
+import ProjectWriteBanner from '../components/ProjectWriteBanner'
 import { isPersonalAccount, readAccountType, userScopeLabel } from '../utils/accountType'
 import { buildAgentRow, groupByProduct, summarizeBinding } from '../utils/inheritance'
 
@@ -131,7 +132,10 @@ function BindingEditor({ product, agentKey, scope, current, onDone, onCancel }) 
 
 export default function AgentsModels() {
   const toast = useToast()
-  const { organizationId, projectId, nonce, isPersonalAccount: personal } = useTenant()
+  const {
+    organizationId, nonce, scopeKey, isPersonalAccount: personal,
+    hasConcreteProject, selectionIsMulti,
+  } = useTenant()
   const [scope, setScope] = useState(() => (isPersonalAccount(readAccountType()) ? 'user' : 'org'))
   const [editing, setEditing] = useState(null)
   const [reloadNonce, setReloadNonce] = useState(0)
@@ -139,7 +143,7 @@ export default function AgentsModels() {
 
   const catalog = useResource('/api/agents/catalog', {
     fallback: { agents: [] },
-    deps: [organizationId, projectId, nonce, reloadNonce],
+    deps: [scopeKey, nonce, reloadNonce],
   })
   const agents = catalog.data?.agents || []
 
@@ -177,7 +181,7 @@ export default function AgentsModels() {
       .finally(() => { if (active) setEffectiveLoading(false) })
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(agents.map((a) => `${a.product}/${a.agent_key}`)), organizationId, projectId, reloadNonce])
+  }, [JSON.stringify(agents.map((a) => `${a.product}/${a.agent_key}`)), scopeKey, reloadNonce])
 
   const groups = useMemo(() => {
     const rows = agents.map((a) => {
@@ -285,6 +289,11 @@ export default function AgentsModels() {
             ]}
           />
         )}
+      />
+
+      <ProjectWriteBanner
+        hasConcreteProject={hasConcreteProject}
+        selectionIsMulti={selectionIsMulti}
       />
 
       {error ? (

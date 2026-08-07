@@ -30,7 +30,7 @@ export default function ConnectorsManager({
   scopeFilter = '',
   readOnly = false,
 }) {
-  const { organizationId } = useTenant()
+  const { organizationId, isPersonalAccount } = useTenant()
   const {
     connectors: allConnectors,
     githubAppConfigured,
@@ -46,6 +46,7 @@ export default function ConnectorsManager({
     updateConnector,
     deleteConnector,
     claimConnector,
+    finishInstall,
   } = useConnectors()
 
   const connectors = (scopeFilter
@@ -58,7 +59,11 @@ export default function ConnectorsManager({
   ).filter((c) => {
     const status = String(c?.status || '').toLowerCase()
     if (status === 'pending_claim') return false
-    if (!String(c?.organization_id || '').trim() && (c.scope || 'org') !== 'admin') return false
+    // Personal accounts own empty-org rows; do not hide them. Org members still
+    // drop unset org_id non-admin rows (incomplete directory sync / orphans).
+    if (!isPersonalAccount && !String(c?.organization_id || '').trim() && (c.scope || 'org') !== 'admin') {
+      return false
+    }
     return true
   })
 
@@ -74,7 +79,9 @@ export default function ConnectorsManager({
   const [patForm, setPatForm] = useState({ token: '', login: '', repos: '', scope: effectiveDefault })
   const [editForm, setEditForm] = useState({ login: '', display_name: '', token: '' })
   const [editingId, setEditingId] = useState('')
+  const [installIdInput, setInstallIdInput] = useState('')
   const claimAttempted = useRef('')
+  const finishAttempted = useRef(false)
 
   const flash = (tone, title, detail) => {
     onFlash?.(tone, title, detail)
@@ -84,7 +91,7 @@ export default function ConnectorsManager({
     setPatForm((f) => ({ ...f, scope: effectiveDefault }))
   }, [effectiveDefault])
 
-  // One-time claim from GitHub orphan callback — confirm target org first.
+  // One-time claim from GitHub orphan callback — confirm target tenant first.
   useEffect(() => {
     const id = String(claimConnectorId || '').trim()
     const token = String(claimToken || '').trim()
@@ -92,14 +99,20 @@ export default function ConnectorsManager({
     const key = `${id}:${token}`
     if (claimAttempted.current === key) return
     const org = String(organizationId || '').trim()
-    if (!org || org === 'all') {
-      flash('error', 'Select an organization before claiming', 'Use the tenant picker, then reopen the claim link.')
-      onClaimParamsConsumed?.()
-      claimAttempted.current = key
-      return
-    }
-    if (!window.confirm(`Claim this GitHub App connector into organization "${org}"?\n\nCancel if you are signed into the wrong Open org.`)) {
-      return
+    if (isPersonalAccount) {
+      if (!window.confirm('Claim this GitHub App connector into your personal Open account?\n\nCancel if you opened the claim link while signed in as the wrong user.')) {
+        return
+      }
+    } else {
+      if (!org || org === 'all') {
+        flash('error', 'Select an organization before claiming', 'Use the tenant picker, then reopen the claim link.')
+        onClaimParamsConsumed?.()
+        claimAttempted.current = key
+        return
+      }
+      if (!window.confirm(`Claim this GitHub App connector into organization "${org}"?\n\nCancel if you are signed into the wrong Open org.`)) {
+        return
+      }
     }
     claimAttempted.current = key
     let cancelled = false
@@ -108,14 +121,14 @@ export default function ConnectorsManager({
       if (cancelled) return
       onClaimParamsConsumed?.()
       if (result.ok) {
-        flash('ok', 'Connector claimed', result.data?.connector?.organization_id || org)
+        flash('ok', 'Connector claimed', result.data?.connector?.organization_id || result.data?.connector?.user_id || org || 'personal')
       } else {
         flash('error', 'Claim failed', result.error)
       }
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimConnectorId, claimToken, organizationId])
+  }, [claimConnectorId, claimToken, organizationId, isPersonalAccount])
 
   const scopeWritable = (scope) => {
     const s = scope || effectiveDefault
@@ -125,7 +138,12 @@ export default function ConnectorsManager({
   }
 
   const activeScope = scopeFilter || patForm.scope || effectiveDefault
-  const formReadOnly = readOnly || !scopeWritable(activeScope) || allowedScopes.length === 0
+  // Connectors are org/user (or admin) scoped for management — not project-bound.
+  // All projects / missing X-Project-ID is fine; OAM/ORA stamp default-project for
+  // directory tenancy without blocking the form.
+  const formReadOnly = readOnly
+    || !scopeWritable(activeScope)
+    || allowedScopes.length === 0
 
   useEffect(() => {
     if (!initialEditId || !connectors.length) return
@@ -171,12 +189,91 @@ export default function ConnectorsManager({
     }
   }
 
+  const canConnectGitHubApp = isPersonalAccount
+    ? canEditUser
+    : (canEditOrg && defaultScope !== 'user')
+
+  // After Connect GitHub App: webhook may create pending_claim without Setup
+  // callback. Returning to this page (or focusing the tab) finishes the bind.
+  useEffect(() => {
+    let pending = false
+    try { pending = sessionStorage.getItem('oam_gh_install_pending') === '1' } catch { /* ignore */ }
+    if (!pending || formReadOnly || !canConnectGitHubApp) return undefined
+
+    const run = async () => {
+      if (finishAttempted.current) return
+      finishAttempted.current = true
+      const result = await finishInstall()
+      if (result.ok) {
+        flash('ok', 'GitHub App connected', result.data?.honesty
+          || result.data?.connector?.account_login
+          || 'Install bound to this Open account.')
+        return
+      }
+      finishAttempted.current = false
+      if (result.quiet) return
+      if (result.data?.error === 'multiple_pending') {
+        flash('warn', 'Pick an installation', 'Several pending installs — enter the installation id from GitHub below.')
+      }
+    }
+
+    const onFocus = () => { run() }
+    window.addEventListener('focus', onFocus)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') onFocus()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    run()
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishInstall, formReadOnly, canConnectGitHubApp])
+
   const handleGitHubInstall = async () => {
-    if (formReadOnly || !canEditOrg) return
+    if (formReadOnly) {
+      flash('warn', 'Connectors are read-only', 'Switch to an account that can manage connectors.')
+      return
+    }
+    if (!canConnectGitHubApp) {
+      flash(
+        'error',
+        'Not allowed',
+        isPersonalAccount
+          ? 'Sign in to connect a GitHub App under your personal Open account.'
+          : 'Select an organization Open account to bind a GitHub App install.',
+      )
+      return
+    }
+    finishAttempted.current = false
     const result = await openGitHubInstall()
-    if (result.ok) return
+    if (result.ok) {
+      flash(
+        'ok',
+        'Complete install on GitHub',
+        'After you install the App, return to this tab — binding finishes automatically even if GitHub does not redirect back.',
+      )
+      return
+    }
     if (result.warn) flash('warn', 'GitHub App not configured', result.error)
     else flash('error', 'Install URL failed', result.error)
+  }
+
+  const handleFinishByInstallationId = async () => {
+    if (formReadOnly) return
+    const id = String(installIdInput || '').trim()
+    if (!id) {
+      flash('warn', 'Installation id required', 'Copy it from the GitHub App installation URL (…/settings/installations/<id>).')
+      return
+    }
+    const result = await finishInstall({ installationId: id })
+    if (result.ok) {
+      flash('ok', 'GitHub App connected', result.data?.honesty || result.data?.connector?.account_login)
+      setInstallIdInput('')
+    } else {
+      flash('error', 'Finish install failed', result.error)
+    }
   }
 
   const handleSaveEdit = async () => {
@@ -210,7 +307,25 @@ export default function ConnectorsManager({
     }
   }
 
-  const rowWritable = (c) => !readOnly && scopeWritable(c.scope || scopeFilter || 'org')
+  const rowWritable = (c) => {
+    if (readOnly || !scopeWritable(c.scope || scopeFilter || 'org')) return false
+    const s = c.scope || scopeFilter || 'org'
+    if (s === 'user') {
+      const me = (typeof localStorage !== 'undefined' ? localStorage.getItem('username') : '') || ''
+      const owner = String(c.user_id || '').trim()
+      if (!me || !owner) return false
+      return me === owner || (owner === 'admin' && (me === 'opa-admin' || me === 'root'))
+    }
+    if (s === 'org') {
+      // Overview dump (no selected org) is read-only for org rows.
+      if (!canEditOrg) return false
+      const org = String(organizationId || '').trim()
+      const ownerOrg = String(c.organization_id || '').trim()
+      if (!org || org === 'all') return false
+      return !ownerOrg || ownerOrg === org
+    }
+    return canEditAdmin
+  }
   const anyRowWritable = connectors.some((c) => rowWritable(c))
 
   return (
@@ -221,14 +336,16 @@ export default function ConnectorsManager({
           <>
             GitHub App is production (webhooks + Check Runs). PAT + repo hooks work without an App.
             App configured: {githubAppConfigured ? 'yes' : 'no'}.
-            {' '}Every connector is scoped to an organisation and project in OAM.
-            {' '}Prefer <strong>Connect GitHub App</strong> while signed into the target Open org (signed install state).
-            Orphan marketplace installs are claimed via the callback deep-link with a one-time claim token.
+            {' '}
+            {isPersonalAccount
+              ? 'Personal Open accounts own connectors under your user — install the App on any GitHub org you admin.'
+              : 'Connectors are organisation- or user-scoped (not bound to a single directory project). Prefer Connect GitHub App while signed into the target Open org (signed install state).'}
+            {' '}Orphan marketplace installs are claimed via the callback deep-link with a one-time claim token.
           </>
         )}
         actions={(
           <>
-            {!formReadOnly && canEditOrg && defaultScope !== 'user' && (
+            {!formReadOnly && canConnectGitHubApp && (
               <Button size="sm" variant="secondary" onClick={handleGitHubInstall}>
                 Connect GitHub App
               </Button>
@@ -321,6 +438,56 @@ export default function ConnectorsManager({
           )}
         />
       </Card>
+
+      {!formReadOnly && canConnectGitHubApp && (
+        <Card
+          title="Finish a pending GitHub App install"
+          description={(
+            <>
+              If you installed the App but it does not appear above, GitHub likely skipped the Setup
+              callback (webhook-only). Return here after Connect, or paste the installation id from
+              {' '}
+              <Code>github.com/settings/installations/&lt;id&gt;</Code>
+              .
+            </>
+          )}
+        >
+          <Grid columns={2}>
+            <Field label="Installation id" htmlFor="gh-install-id">
+              <Input
+                id="gh-install-id"
+                className="oui-mono"
+                value={installIdInput}
+                onChange={(e) => setInstallIdInput(e.target.value)}
+                placeholder="e.g. 12345678"
+              />
+            </Field>
+          </Grid>
+          <div className="oui-row">
+            <Button variant="primary" disabled={busy || !installIdInput.trim()} onClick={handleFinishByInstallationId}>
+              Bind installation
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={async () => {
+                finishAttempted.current = false
+                try { sessionStorage.setItem('oam_gh_install_pending', '1') } catch { /* ignore */ }
+                const result = await finishInstall()
+                if (result.ok) {
+                  flash('ok', 'GitHub App connected', result.data?.honesty || result.data?.connector?.account_login)
+                } else if (!result.quiet) {
+                  flash('error', 'Finish install failed', result.error)
+                } else {
+                  flash('warn', 'Nothing to finish', 'Click Connect GitHub App, install on GitHub, then return — or paste an installation id.')
+                }
+              }}
+            >
+              Retry after Connect
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {!formReadOnly && (
         <Card

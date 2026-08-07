@@ -6,6 +6,7 @@ import App from './App'
 import '@open-family/ui/styles.css'
 import { applyProduct, initTheme, productTitle } from '@open-family/ui'
 import './index.css'
+import { clearImpersonationStash } from './utils/impersonation'
 
 // Stamp product and theme before React renders, so the first paint is already
 // bronze and already in the right theme. `applyProduct` binds --accent and its
@@ -57,6 +58,8 @@ axios.interceptors.response.use(
       localStorage.removeItem('auth_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
+      localStorage.removeItem('account_type')
+      clearImpersonationStash()
       const back = encodeURIComponent(window.location.pathname + window.location.search)
       window.location.assign(`/login?next=${back}`)
     }

@@ -1,16 +1,24 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { FiRefreshCw, FiSun, FiMoon, FiUser, FiLogOut } from 'react-icons/fi'
 import axios from 'axios'
 import {
   AppShell, PageContent, Sidebar, TopBar, TopBarDivider,
   OrgSwitcher, UserMenu, MenuHeader, MenuItem, MenuLabel, MenuSeparator,
-  Button, ToastProvider, useSidebarCollapsed, useTheme, productTitle,
+  ProjectScopeMenu, formatProjectScopeLabel,
+  Banner, Button, ToastProvider, useSidebarCollapsed, useTheme, productTitle,
 } from '@open-family/ui'
 import { NAV_SECTIONS, OVERVIEW_ITEM, pageTitleForPath } from '../../nav'
 import { navIcon } from '../../icons'
 import { useTenant, ALL } from '../../contexts/TenantContext'
 import { apiUrl } from '../../utils/apiBase'
+import { directoryNavVisibility, readAccountType, readRole } from '../../utils/accountType'
+import {
+  clearImpersonationStash,
+  endImpersonation,
+  isImpersonating,
+  readImpersonator,
+} from '../../utils/impersonation'
 
 const PRODUCT_NAME = 'Open Account Manager'
 
@@ -27,32 +35,41 @@ function initialsFor(name) {
  * The scope switcher. Unlike the peer consoles this is not a view filter — it
  * decides which organisation's credentials and bindings you are editing — so the
  * "all" option is labelled as the default target rather than as a wildcard.
+ *
+ * Always shown, including personal accounts (org line is "My account"; project
+ * line lists the OAM directory).
  */
 function TenantSwitcher() {
   const {
-    organizationId, projectId, organizations, projects, selectOrganization, selectProject,
+    organizationId, selection, organizations, projects, selectOrganization, setProjectSelection,
     isPersonalAccount: personal, orgLocked,
   } = useTenant()
 
-  if (personal) return null
+  const projectItems = useMemo(
+    () => projects.map((p) => ({ id: String(p.id), label: p.name || p.id })),
+    [projects],
+  )
 
   const org = organizations.find((o) => o.id === organizationId)
-  const project = projects.find((p) => p.id === projectId)
-
-  const orgLabel = organizationId === ALL ? 'Default organisation' : (org?.name || organizationId)
-  const projectLabel = projectId === ALL ? 'All projects' : (project?.name || projectId)
+  const orgLabel = personal
+    ? 'My account'
+    : (organizationId === ALL ? 'No organisation' : (org?.name || organizationId))
 
   const uniqueOrgs = organizations.filter(
     (o, i, self) => i === self.findIndex((x) => x.id === o.id),
   )
 
   return (
-    <OrgSwitcher contextLabel={orgLabel} value={projectLabel} initials={initialsFor(orgLabel)}>
-      {!orgLocked ? (
+    <OrgSwitcher
+      contextLabel={orgLabel}
+      value={formatProjectScopeLabel(selection, projectItems)}
+      initials={initialsFor(orgLabel)}
+    >
+      {!personal && !orgLocked ? (
         <>
           <MenuLabel>Organisation</MenuLabel>
           <MenuItem checked={organizationId === ALL} onSelect={() => selectOrganization(ALL)}>
-            Default organisation
+            No organisation
           </MenuItem>
           {uniqueOrgs.map((o) => (
             <MenuItem
@@ -66,19 +83,11 @@ function TenantSwitcher() {
           <MenuSeparator />
         </>
       ) : null}
-      <MenuLabel>Project</MenuLabel>
-      <MenuItem checked={projectId === ALL} onSelect={() => selectProject(ALL)}>
-        All projects
-      </MenuItem>
-      {projects.map((p) => (
-        <MenuItem
-          key={p.id}
-          checked={p.id === projectId}
-          onSelect={() => selectProject(p.id)}
-        >
-          {p.name || p.id}
-        </MenuItem>
-      ))}
+      <ProjectScopeMenu
+        projects={projectItems}
+        selection={selection}
+        onChange={setProjectSelection}
+      />
     </OrgSwitcher>
   )
 }
@@ -92,8 +101,16 @@ export default function Shell({ children }) {
   const { theme, setTheme, toggle: toggleTheme, resolved } = useTheme('oam_theme')
 
   const username = localStorage.getItem('username') || ''
-  const role = localStorage.getItem('role') || ''
+  const role = readRole()
+  const accountType = readAccountType()
   const isAdmin = role.toLowerCase() === 'admin'
+  const actingAs = isImpersonating()
+  const impersonator = actingAs ? readImpersonator() : ''
+  const [stopping, setStopping] = useState(false)
+  const dirNav = useMemo(
+    () => directoryNavVisibility({ role, accountType }),
+    [role, accountType],
+  )
 
   // The browser tab names the page, not the product.
   useEffect(() => {
@@ -105,8 +122,25 @@ export default function Shell({ children }) {
     setDrawerOpen(false)
   }, [navigate])
 
+  const stopImpersonating = async () => {
+    setStopping(true)
+    try {
+      try { await axios.post(apiUrl('/api/auth/impersonate/stop')) } catch { /* restore locally regardless */ }
+      endImpersonation()
+      window.location.assign('/users')
+    } catch {
+      clearImpersonationStash()
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
+      localStorage.removeItem('account_type')
+      window.location.assign('/login')
+    }
+  }
+
   const signOut = async () => {
     try { await axios.post(apiUrl('/api/auth/logout')) } catch { /* clear locally regardless */ }
+    clearImpersonationStash()
     localStorage.removeItem('auth_token')
     localStorage.removeItem('username')
     localStorage.removeItem('role')
@@ -117,12 +151,18 @@ export default function Shell({ children }) {
   const sections = NAV_SECTIONS.map((section) => ({
     id: section.id,
     label: section.label,
-    items: section.items.map((item) => ({
-      to: item.to,
-      label: item.label,
-      icon: navIcon(item.icon),
-    })),
-  }))
+    items: section.items
+      .filter((item) => {
+        if (item.to === '/users') return dirNav.users
+        if (item.to === '/organizations') return dirNav.organizations
+        return true
+      })
+      .map((item) => ({
+        to: item.to,
+        label: item.label,
+        icon: navIcon(item.icon),
+      })),
+  })).filter((section) => section.items.length > 0)
 
   return (
     <ToastProvider>
@@ -183,7 +223,26 @@ export default function Shell({ children }) {
           />
         }
       >
-        <PageContent>{children}</PageContent>
+        <PageContent>
+          {actingAs ? (
+            <div className="oam-impersonation-banner">
+              <Banner
+                tone="warning"
+                title={`Acting as ${username || 'another user'}`}
+                actions={(
+                  <Button size="sm" variant="secondary" loading={stopping} onClick={stopImpersonating}>
+                    Stop
+                  </Button>
+                )}
+              >
+                {impersonator
+                  ? `Signed in as ${impersonator}; tenant scope follows this account until you stop.`
+                  : 'Tenant scope follows this account until you stop.'}
+              </Banner>
+            </div>
+          ) : null}
+          {children}
+        </PageContent>
       </AppShell>
     </ToastProvider>
   )

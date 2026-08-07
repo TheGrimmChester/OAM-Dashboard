@@ -58,3 +58,27 @@
   font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
+
+/* Connector id chips in Projects list / GitHub import table. */
+.oam-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+/* Soften link colour inside mono identifier cells so the table stays quiet. */
+a.oam-mono {
+  color: var(--accent-text, var(--accent));
+  text-decoration: none;
+}
+
+.oam-copy-row__value .oam-chip-row {
+  margin-top: var(--space-2);
+}
+
+/* Persistent strip while an admin is acting as another user. */
+.oam-impersonation-banner {
+  margin-bottom: var(--space-4);
+}
+

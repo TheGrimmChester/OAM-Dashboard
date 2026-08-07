@@ -9,12 +9,49 @@ export function readAccountType() {
   }
 }
 
+export function readRole() {
+  try {
+    return localStorage.getItem('role') || ''
+  } catch {
+    return ''
+  }
+}
+
 export function isPersonalAccount(type = readAccountType()) {
   return type === 'personal'
 }
 
 export function isOrganizationAccount(type = readAccountType()) {
   return type === 'organization'
+}
+
+/**
+ * Directory nav visibility for Users / Organisations.
+ *
+ * Platform unbound admin (role=admin, not an organisation account): both.
+ * Organisation account (any role): Users only (scoped server-side).
+ * Personal non-admin: neither.
+ */
+export function directoryNavVisibility({ role = readRole(), accountType = readAccountType() } = {}) {
+  const roleNorm = String(role || '').toLowerCase()
+  const type = String(accountType || '').toLowerCase()
+  if (type === 'organization') {
+    return { users: true, organizations: false }
+  }
+  if (roleNorm === 'admin') {
+    return { users: true, organizations: true }
+  }
+  return { users: false, organizations: false }
+}
+
+/** Create/update/delete users: unbound admin, or org editor/admin. */
+export function canManageDirectoryUsers({ role = readRole(), accountType = readAccountType() } = {}) {
+  const roleNorm = String(role || '').toLowerCase()
+  const type = String(accountType || '').toLowerCase()
+  if (type === 'organization') {
+    return roleNorm === 'editor' || roleNorm === 'admin'
+  }
+  return roleNorm === 'admin'
 }
 
 /** Derive account_type when the API has not yet returned the field. */

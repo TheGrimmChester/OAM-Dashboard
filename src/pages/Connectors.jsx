@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { FiGitBranch } from 'react-icons/fi'
 import { Banner, Button, PageHeader, Stack, useToast } from '@open-family/ui'
 import ConnectorsManager from '../components/connectors/ConnectorsManager'
+import ProjectWriteBanner from '../components/ProjectWriteBanner'
+import { useTenant } from '../contexts/TenantContext'
 
 const FLASH_TONE = { ok: 'good', warn: 'warning', error: 'critical' }
 
@@ -17,23 +19,31 @@ function claimTokenFromLocation(searchParams) {
 /**
  * SCM connectors — the family console for GitHub App / PAT installations.
  *
- * Provider keys and AI endpoint failover live on Credentials and AI Endpoints.
+ * Provider keys and AI endpoint failover live on AI Endpoints.
  * Orphan App installs claim via `?connector=` + `#claim_token=` deep-link only.
  */
 export default function Connectors() {
   const [searchParams, setSearchParams] = useSearchParams()
   const toast = useToast()
+  const { hasConcreteProject, selectionIsMulti, isPersonalAccount } = useTenant()
   const [banner, setBanner] = useState(null)
   const editId = searchParams.get('edit') || ''
   const claimConnectorId = searchParams.get('connector') || ''
   const claimToken = useMemo(() => claimTokenFromLocation(searchParams), [searchParams])
-  const role = localStorage.getItem('role') || ''
-  const isAdmin = role === 'admin' || role === ''
-  const defaultScope = isAdmin ? 'org' : 'user'
+  // Org accounts manage org-scoped connectors; personal accounts manage user-scoped.
+  // Admin is overview-only — not required for Connect / claim / edit.
+  const defaultScope = isPersonalAccount ? 'user' : 'org'
 
   const onFlash = (tone, title, detail) => {
-    setBanner({ tone, title, detail })
-    toast.push({ title, tone: tone === 'error' ? 'critical' : 'accent' })
+    const detailText = detail == null
+      ? ''
+      : (typeof detail === 'string' ? detail : JSON.stringify(detail))
+    setBanner({ tone, title, detail: detailText })
+    toast.push({
+      title,
+      description: detailText || undefined,
+      tone: FLASH_TONE[tone] || (tone === 'error' ? 'critical' : 'accent'),
+    })
   }
 
   const clearClaimParams = () => {
@@ -52,14 +62,18 @@ export default function Connectors() {
         title={<><FiGitBranch /> Connectors</>}
         description={(
           <>
-            SCM connections (GitHub App or PAT + repo hooks) scoped to an organisation and project.
+            SCM connections (GitHub App or PAT + repo hooks) for your Open account —
+            organization tenants share org-scoped installs; personal accounts own installs under your user.
             Events fan out from Open Review Agent to compatible family checkers (review, AppSec, perf, delivery).
             AI provider keys live under{' '}
-            <Link to="/credentials">Credentials</Link>
-            {' '}and{' '}
             <Link to="/endpoints">AI Endpoints</Link>.
           </>
         )}
+      />
+
+      <ProjectWriteBanner
+        hasConcreteProject={hasConcreteProject}
+        selectionIsMulti={selectionIsMulti}
       />
 
       {banner && (

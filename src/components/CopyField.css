@@ -1,0 +1,41 @@
+/* Copied confirmation tone — the tick icon carries the same message. */
+.oam-copy.is-copied {
+  color: var(--good-text);
+}
+
+.oam-copy-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle, var(--border));
+}
+
+.oam-copy-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.oam-copy-row__term {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.oam-copy-row__value {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.oam-snippet {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface-inverse, #171b24);
+  color: var(--text-on-inverse, #e8ebf0);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}

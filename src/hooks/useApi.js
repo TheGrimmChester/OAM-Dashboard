@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
 import { apiUrl } from '../utils/apiBase'
+import { useTenant } from '../contexts/TenantContext'
 
 /**
  * One GET, with the three states a table needs kept distinct.
@@ -10,8 +11,12 @@ import { apiUrl } from '../utils/apiBase'
  * is in flight — or after it failed — tells an operator their keys are gone.
  * That is the failure this hook exists to prevent, and why `data` starts as the
  * caller's fallback and is only replaced on success.
+ *
+ * Always re-fetches when the org/project switcher changes (`scopeKey`), so
+ * single, multi, and All selections never leave stale rows on screen.
  */
 export function useResource(path, { fallback = null, deps = [], skip = false } = {}) {
+  const { scopeKey } = useTenant()
   const [data, setData] = useState(fallback)
   const [loading, setLoading] = useState(!skip)
   const [error, setError] = useState(null)
@@ -33,7 +38,7 @@ export function useResource(path, { fallback = null, deps = [], skip = false } =
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, skip, nonce, ...deps])
+  }, [path, skip, nonce, scopeKey, ...deps])
 
   return { data, loading, error, reload }
 }

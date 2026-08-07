@@ -30,7 +30,7 @@ function Count({ label, value, loading, error, icon, to }) {
 }
 
 export default function Overview() {
-  const { organizationId, nonce } = useTenant()
+  const { organizationId, nonce, isPersonalAccount: personal } = useTenant()
   const deps = [organizationId, nonce]
 
   const health = useResource('/api/health', { fallback: {}, deps })
@@ -49,6 +49,10 @@ export default function Overview() {
   const cryptoMissing = health.data?.secret_key_present === false
   const clickhouseDown = health.data?.clickhouse === false
 
+  const scopeLabel = personal
+    ? 'My account'
+    : (organizationId === 'all' ? 'No organisation' : organizationId)
+
   return (
     <Stack gap="sections">
       <PageHeader
@@ -58,7 +62,7 @@ export default function Overview() {
           + 'credentials jobs resolve, and the per-agent model bindings that decide which model runs which task.'
         }
         meta={[
-          { label: 'Scope', value: organizationId === 'all' ? 'default organisation' : organizationId },
+          { label: 'Scope', value: scopeLabel },
           { label: 'Service', value: health.data?.service || 'oam-api' },
         ]}
       />
@@ -96,7 +100,6 @@ export default function Overview() {
           value={(users.data?.users || []).length}
           loading={users.loading} error={users.error}
         />
-
         <Count
           label="Connectors" icon={<FiGitBranch />} to="/connectors"
           value={(connectors.data?.connectors || []).length}

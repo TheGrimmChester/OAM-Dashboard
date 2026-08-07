@@ -139,8 +139,8 @@ export default function Organizations() {
               icon={<FiHome />}
               title="No organisations are stored yet"
               description={
-                'Products will fall back to their default organisation until one exists here. Creating one '
-                + 'makes it selectable in every family console immediately, with no agent enrolled.'
+                'Create an organisation to group projects for the family consoles. '
+                + 'Until one exists, unbound sessions have no organisation scope.'
               }
             />
           }

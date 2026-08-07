@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import axios from 'axios'
-import { useResource } from './useApi'
+import { describeError, useResource } from './useApi'
 import { apiUrl } from '../utils/apiBase'
+import { useTenant } from '../contexts/TenantContext'
 
 /**
  * Shared SCM connectors list + mutations (GitHub App / PAT).
@@ -10,7 +11,14 @@ import { apiUrl } from '../utils/apiBase'
  * Vite proxy all `/api/` to oam-api — no ora-api proxy needed for this console.
  */
 export function useConnectors({ skip = false } = {}) {
-  const query = useResource('/api/connectors', { fallback: { connectors: [] }, skip })
+  const { organizationId, isPersonalAccount } = useTenant()
+  const role = (typeof localStorage !== 'undefined' ? localStorage.getItem('role') : '') || ''
+  const isPlatformAdmin = String(role).toLowerCase() === 'admin'
+  // Unbound platform admin overview: cross-org list (mutations still ownership-scoped).
+  const allOrgs = isPlatformAdmin && !isPersonalAccount
+    && (!organizationId || organizationId === 'all')
+  const listPath = allOrgs ? '/api/connectors?all_organizations=1' : '/api/connectors'
+  const query = useResource(listPath, { fallback: { connectors: [] }, skip })
   const [busy, setBusy] = useState(false)
 
   const connectors = query.data?.connectors || []
@@ -34,22 +42,50 @@ export function useConnectors({ skip = false } = {}) {
       await query.reload?.()
       return { ok: true, data }
     } catch (e) {
-      return { ok: false, error: e.response?.data || e.message }
+      return { ok: false, error: describeError(e) }
     } finally {
       setBusy(false)
     }
   }, [query])
 
   const openGitHubInstall = useCallback(async () => {
+    // Preserve the click gesture: open a tab synchronously, then set the URL
+    // after the async BFF call. window.open(..., 'noopener') after await is
+    // often blocked and returns null — which previously looked like success.
+    let popup = null
+    try {
+      popup = window.open('about:blank', '_blank')
+    } catch {
+      popup = null
+    }
     try {
       const { data } = await axios.get(apiUrl('/api/connectors/github/install-url'))
-      if (data.install_url) {
-        window.open(data.install_url, '_blank', 'noopener')
-        return { ok: true, data }
+      const url = typeof data?.install_url === 'string' ? data.install_url.trim() : ''
+      if (!url) {
+        try { popup?.close() } catch { /* ignore */ }
+        return {
+          ok: false,
+          warn: true,
+          error: data?.note || data?.message || 'GitHub App not configured',
+        }
       }
-      return { ok: false, warn: true, error: data.note || 'GitHub App not configured' }
+      if (popup && !popup.closed) {
+        try {
+          popup.opener = null
+          popup.location.href = url
+          try { sessionStorage.setItem('oam_gh_install_pending', '1') } catch { /* ignore */ }
+          return { ok: true, data }
+        } catch {
+          try { popup.close() } catch { /* ignore */ }
+        }
+      }
+      // Popup blocked or inaccessible — same-tab navigation still completes install.
+      try { sessionStorage.setItem('oam_gh_install_pending', '1') } catch { /* ignore */ }
+      window.location.assign(url)
+      return { ok: true, data, navigated: true }
     } catch (e) {
-      return { ok: false, error: e.response?.data || e.message }
+      try { popup?.close() } catch { /* ignore */ }
+      return { ok: false, error: describeError(e) }
     }
   }, [])
 
@@ -63,7 +99,7 @@ export function useConnectors({ skip = false } = {}) {
       await query.reload?.()
       return { ok: true, data }
     } catch (e) {
-      return { ok: false, error: e.response?.data || e.message }
+      return { ok: false, error: describeError(e) }
     } finally {
       setBusy(false)
     }
@@ -77,7 +113,7 @@ export function useConnectors({ skip = false } = {}) {
       await query.reload?.()
       return { ok: true }
     } catch (e) {
-      return { ok: false, error: e.response?.data || e.message }
+      return { ok: false, error: describeError(e) }
     } finally {
       setBusy(false)
     }
@@ -95,7 +131,31 @@ export function useConnectors({ skip = false } = {}) {
       await query.reload?.()
       return { ok: true, data }
     } catch (e) {
-      return { ok: false, error: e.response?.data || e.message }
+      return { ok: false, error: describeError(e) }
+    } finally {
+      setBusy(false)
+    }
+  }, [query])
+
+  /** Bind a webhook-only pending App install (Setup callback missed). */
+  const finishInstall = useCallback(async ({ installationId } = {}) => {
+    setBusy(true)
+    try {
+      const body = {}
+      const inst = String(installationId || '').trim()
+      if (inst) body.installation_id = inst
+      const { data } = await axios.post(apiUrl('/api/connectors/github/finish-install'), body)
+      try { sessionStorage.removeItem('oam_gh_install_pending') } catch { /* ignore */ }
+      await query.reload?.()
+      return { ok: true, data }
+    } catch (e) {
+      const status = e?.response?.status
+      const payload = e?.response?.data
+      // Quiet "nothing to finish" — caller decides whether to toast.
+      if (status === 409 && (payload?.error === 'no_install_intent' || payload?.error === 'no_pending_install')) {
+        return { ok: false, quiet: true, error: describeError(e), data: payload }
+      }
+      return { ok: false, error: describeError(e), data: payload }
     } finally {
       setBusy(false)
     }
@@ -117,6 +177,7 @@ export function useConnectors({ skip = false } = {}) {
     updateConnector,
     deleteConnector,
     claimConnector,
+    finishInstall,
   }
 }
 
